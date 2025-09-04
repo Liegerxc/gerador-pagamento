@@ -1,17 +1,30 @@
-// server.js - VERSÃO COM IDENTIFICADOR POR CELULAR
+// server.js - VERSÃO FINAL COM MONGODB ATLAS
 import express from 'express';
 import cors from 'cors';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
-import { Low } from 'lowdb';
-import { JSONFile } from 'lowdb/node';
-import { fileURLToPath } from 'url';
-import path from 'path';
+import { MongoClient } from 'mongodb';
 
-// Configuração do DB
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const file = path.join(__dirname, 'db.json');
-const adapter = new JSONFile(file);
-const db = new Low(adapter, { payments: [] });
+// --- CONFIGURAÇÃO DO BANCO DE DADOS ---
+// Pega a URL de conexão das variáveis de ambiente do Render
+const connectionString = process.env.DATABASE_URL;
+const mongoClient = new MongoClient(connectionString);
+
+let paymentsCollection;
+
+// Conecta ao MongoDB ao iniciar o servidor
+async function connectDb() {
+    try {
+        await mongoClient.connect();
+        console.log("Conectado ao MongoDB Atlas com sucesso!");
+        const db = mongoClient.db("pagamentosDb"); // Nome do banco de dados
+        paymentsCollection = db.collection("payments"); // Nome da coleção (tabela)
+    } catch (error) {
+        console.error("Falha ao conectar ao MongoDB", error);
+        process.exit(1); // Encerra a aplicação se não conseguir conectar ao DB
+    }
+}
+connectDb();
+
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -29,20 +42,16 @@ app.use(express.static('public'));
 // ROTA PARA CRIAR O PAGAMENTO
 app.post('/create_payment', async (req, res) => {
     try {
-        await db.read();
-
-        const { amount, identifier } = req.body; // 'identifier' agora será o número de celular
+        const { amount, identifier } = req.body;
         const parsedAmount = parseFloat(amount);
 
-        // MUDANÇA: Validação simples para o número de celular
-        if (!identifier || identifier.trim().length < 10) { // Verifica se tem pelo menos 10 dígitos
-            return res.status(400).json({ error: 'O número de celular é obrigatório e deve ser válido.' });
+        if (!identifier || identifier.trim().length < 10) {
+            return res.status(400).json({ error: 'O número de celular é obrigatório.' });
         }
         if (isNaN(parsedAmount) || parsedAmount <= 0) {
             return res.status(400).json({ error: 'Valor inválido.' });
         }
         
-        // MUDANÇA: Descrição do pagamento atualizada
         const payment_data = {
             transaction_amount: parsedAmount,
             description: `Pagamento referente ao celular: ${identifier}`,
@@ -53,16 +62,14 @@ app.post('/create_payment', async (req, res) => {
 
         const result = await payment.create({ body: payment_data });
 
-        db.data.payments.push({
+        // Insere o registro no MongoDB
+        await paymentsCollection.insertOne({
             mp_id: result.id,
-            identifier: identifier, // Salva o número de celular como identificador
+            identifier: identifier,
             amount: parsedAmount,
             status: 'pending',
-            created_at: new Date().toISOString(),
-            qr_code: result.point_of_interaction.transaction_data.qr_code,
-            qr_code_base64: result.point_of_interaction.transaction_data.qr_code_base64
+            created_at: new Date()
         });
-        await db.write();
 
         res.json({
             qrCodeBase64: result.point_of_interaction.transaction_data.qr_code_base64,
@@ -75,7 +82,7 @@ app.post('/create_payment', async (req, res) => {
     }
 });
 
-// ROTA DE WEBHOOK (sem alterações)
+// ROTA DE WEBHOOK
 app.post('/webhook', async (req, res) => {
     const webhookData = req.body;
 
@@ -84,13 +91,12 @@ app.post('/webhook', async (req, res) => {
             const paymentId = webhookData.data.id;
             const paymentInfo = await payment.get({ id: paymentId });
             
-            await db.read();
-            const paymentInDb = db.data.payments.find(p => p.mp_id == paymentId);
-
-            if (paymentInDb && paymentInfo.status === 'approved' && paymentInDb.status !== 'approved') {
-                paymentInDb.status = 'approved';
-                paymentInDb.paid_at = new Date().toISOString();
-                await db.write();
+            if (paymentInfo.status === 'approved') {
+                // Atualiza o documento no MongoDB
+                await paymentsCollection.updateOne(
+                    { mp_id: Number(paymentId) },
+                    { $set: { status: 'approved', paid_at: new Date() } }
+                );
             }
         } catch (error) {
             console.error('Erro no webhook:', error);
@@ -100,11 +106,16 @@ app.post('/webhook', async (req, res) => {
     res.sendStatus(200);
 });
 
-// ROTA PARA BUSCAR A LISTA DE PAGAMENTOS (sem alterações)
+// ROTA PARA BUSCAR A LISTA DE PAGAMENTOS
 app.get('/get_payments', async (req, res) => {
-    await db.read();
-    const sortedPayments = [...db.data.payments].reverse();
-    res.json(sortedPayments);
+    try {
+        // Busca os pagamentos no MongoDB, ordenando pelos mais recentes
+        const payments = await paymentsCollection.find({}).sort({ created_at: -1 }).toArray();
+        res.json(payments);
+    } catch (error) {
+        console.error('Erro ao ler pagamentos:', error);
+        res.status(500).json({ error: 'Não foi possível ler os registros.' });
+    }
 });
 
 app.listen(port, () => {
