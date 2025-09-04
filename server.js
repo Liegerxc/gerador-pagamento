@@ -1,4 +1,4 @@
-// server.js - VERSÃO FINAL REVISADA
+// server.js - VERSÃO FINAL COM CORREÇÃO DE RACE CONDITION
 import express from 'express';
 import cors from 'cors';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
@@ -7,25 +7,12 @@ import { MongoClient } from 'mongodb';
 // --- CONFIGURAÇÃO DO BANCO DE DADOS ---
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
-    console.error("Erro: A variável de ambiente DATABASE_URL não está definida.");
+    console.error("Erro Crítico: A variável de ambiente DATABASE_URL não está definida.");
     process.exit(1);
 }
+
 const mongoClient = new MongoClient(connectionString);
-
 let paymentsCollection;
-
-async function connectDb() {
-    try {
-        await mongoClient.connect();
-        console.log("Conectado ao MongoDB Atlas com sucesso!");
-        const db = mongoClient.db("pagamentosDb");
-        paymentsCollection = db.collection("payments");
-    } catch (error) {
-        console.error("Falha ao conectar ao MongoDB", error);
-        process.exit(1);
-    }
-}
-connectDb();
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -63,7 +50,7 @@ app.post('/create_payment', async (req, res) => {
         const result = await payment.create({ body: payment_data });
 
         await paymentsCollection.insertOne({
-            mp_id: result.id, // O ID do Mercado Pago é um NÚMERO
+            mp_id: result.id,
             identifier: identifier,
             amount: parsedAmount,
             status: 'pending',
@@ -84,17 +71,13 @@ app.post('/create_payment', async (req, res) => {
 // ROTA DE WEBHOOK
 app.post('/webhook', async (req, res) => {
     const webhookData = req.body;
-
     if (webhookData.type === 'payment') {
         try {
-            const paymentId = webhookData.data.id; // Vem como string
+            const paymentId = webhookData.data.id;
             const paymentInfo = await payment.get({ id: paymentId });
-            
-            // CONVERSÃO IMPORTANTE: Convertendo o ID do webhook para NÚMERO para a busca
             const mpIdAsNumber = Number(paymentId);
             
             if (paymentInfo.status === 'approved') {
-                // Atualiza o documento no MongoDB usando o ID como número
                 await paymentsCollection.updateOne(
                     { mp_id: mpIdAsNumber },
                     { $set: { status: 'approved', paid_at: new Date() } }
@@ -102,18 +85,14 @@ app.post('/webhook', async (req, res) => {
             }
         } catch (error) {
             console.error('Erro no webhook:', error);
-            // Não pare o servidor por um erro de webhook, apenas logue
         }
     }
-    res.sendStatus(200); // Sempre responda 200 para o Mercado Pago
+    res.sendStatus(200);
 });
 
 // ROTA PARA BUSCAR A LISTA DE PAGAMENTOS
 app.get('/get_payments', async (req, res) => {
     try {
-        if (!paymentsCollection) {
-            throw new Error("A conexão com o banco de dados ainda não foi estabelecida.");
-        }
         const payments = await paymentsCollection.find({}).sort({ created_at: -1 }).toArray();
         res.json(payments);
     } catch (error) {
@@ -122,6 +101,27 @@ app.get('/get_payments', async (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`Servidor rodando na porta ${port}`);
-});
+
+// --- LÓGICA DE INICIALIZAÇÃO CORRIGIDA ---
+// Função principal para iniciar o servidor
+async function startServer() {
+    try {
+        // 1. Conecta ao banco de dados e ESPERA a conexão ser concluída
+        await mongoClient.connect();
+        console.log("Conectado ao MongoDB Atlas com sucesso!");
+        const db = mongoClient.db("pagamentosDb");
+        paymentsCollection = db.collection("payments");
+
+        // 2. SÓ DEPOIS de conectar, inicia o servidor web
+        app.listen(port, () => {
+            console.log(`Servidor rodando na porta ${port} e pronto para receber requisições.`);
+        });
+
+    } catch (error) {
+        console.error("Falha CRÍTICA ao iniciar o servidor:", error);
+        process.exit(1);
+    }
+}
+
+// Executa a função principal
+startServer();
