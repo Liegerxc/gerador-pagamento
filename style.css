@@ -1,0 +1,125 @@
+/* public/style.css */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f4f4f4;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    color: #333;
+}
+
+.payment-container {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
+
+h1 {
+    color: #009ee3;
+    margin-bottom: 10px;
+}
+
+p {
+    color: #666;
+    margin-bottom: 25px;
+}
+
+.input-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 1.2em;
+}
+
+button {
+    background-color: #009ee3;
+    color: white;
+    border: none;
+    padding: 15px 20px;
+    border-radius: 4px;
+    font-size: 1em;
+    width: 100%;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #007bb5;
+}
+
+button:disabled {
+    background-color: #a0a0a0;
+    cursor: not-allowed;
+}
+
+.hidden {
+    display: none;
+}
+
+#loading, #error-message {
+    margin-top: 20px;
+    color: #666;
+}
+
+#error-message {
+    color: #d9534f;
+    font-weight: bold;
+}
+
+#payment-info {
+    margin-top: 25px;
+}
+
+#qr-code-container {
+    margin: 20px 0;
+}
+
+#qr-code-image {
+    max-width: 100%;
+    border: 1px solid #eee;
+    border-radius: 4px;
+}
+
+.copy-paste-group {
+    display: flex;
+    margin-top: 10px;
+}
+
+.copy-paste-group input {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px 0 0 4px;
+    background-color: #f9f9f9;
+    font-size: 0.9em;
+}
+
+#copy-button {
+    width: auto;
+    border-radius: 0 4px 4px 0;
+}
+
+#copy-feedback {
+    margin-top: 10px;
+    color: #28a745;
+    font-weight: bold;
+}

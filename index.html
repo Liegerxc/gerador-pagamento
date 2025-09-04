@@ -1,0 +1,100 @@
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Pagamento - Mercado Pago</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="payment-container">
+        <h1>Gerador de Pagamento</h1>
+        <p>Gere um QR Code PIX para pagamento.</p>
+
+        <div class="input-group">
+            <label for="amount">Valor (R$):</label>
+            <input type="number" id="amount" value="25.00" step="0.01" min="0.01">
+        </div>
+
+        <button id="generate-payment">Gerar QR Code</button>
+
+        <div id="loading" class="hidden">Gerando, por favor aguarde...</div>
+
+        <div id="payment-info" class="hidden">
+            <h2>Pague com PIX</h2>
+            <div id="qr-code-container">
+                <img id="qr-code-image" src="" alt="QR Code PIX">
+            </div>
+            <p>Ou use o código "Copia e Cola":</p>
+            <div class="copy-paste-group">
+                <input type="text" id="copy-paste-code" readonly>
+                <button id="copy-button">Copiar</button>
+            </div>
+            <div id="copy-feedback" class="hidden">Copiado!</div>
+        </div>
+        <div id="error-message" class="hidden"></div>
+    </div>
+
+    <script>
+        document.getElementById('generate-payment').addEventListener('click', async () => {
+            const amount = document.getElementById('amount').value;
+            const generateButton = document.getElementById('generate-payment');
+            const loadingDiv = document.getElementById('loading');
+            const paymentInfoDiv = document.getElementById('payment-info');
+            const errorMessageDiv = document.getElementById('error-message');
+
+            // Resetar a interface
+            generateButton.disabled = true;
+            loadingDiv.classList.remove('hidden');
+            paymentInfoDiv.classList.add('hidden');
+            errorMessageDiv.classList.add('hidden');
+
+            try {
+                const response = await fetch('http://localhost:3000/create_payment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ amount: amount })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Falha na comunicação com o servidor.');
+                }
+
+                const data = await response.json();
+
+                if (data.qrCodeBase64 && data.qrCode) {
+                    document.getElementById('qr-code-image').src = `data:image/jpeg;base64,${data.qrCodeBase64}`;
+                    document.getElementById('copy-paste-code').value = data.qrCode;
+                    paymentInfoDiv.classList.remove('hidden');
+                } else {
+                     throw new Error('Resposta do servidor inválida.');
+                }
+
+            } catch (error) {
+                console.error('Erro:', error);
+                errorMessageDiv.textContent = 'Não foi possível gerar o pagamento. Tente novamente.';
+                errorMessageDiv.classList.remove('hidden');
+            } finally {
+                loadingDiv.classList.add('hidden');
+                generateButton.disabled = false;
+            }
+        });
+
+        document.getElementById('copy-button').addEventListener('click', () => {
+            const copyText = document.getElementById('copy-paste-code');
+            copyText.select();
+            copyText.setSelectionRange(0, 99999); // Para dispositivos móveis
+            document.execCommand('copy');
+            
+            const feedback = document.getElementById('copy-feedback');
+            feedback.classList.remove('hidden');
+            setTimeout(() => {
+                feedback.classList.add('hidden');
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
