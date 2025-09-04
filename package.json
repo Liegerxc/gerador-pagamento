@@ -18,7 +18,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "lowdb": "^7.0.1",
-    "mercadopago": "^2.0.10"
+    "mercadopago": "^2.0.10",
+    "mongodb": "^6.7.0"
   }
 }
