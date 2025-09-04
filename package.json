@@ -1,0 +1,22 @@
+{
+  "name": "gerador-pagamento-backend",
+  "version": "1.0.0",
+  "description": "Backend para gerar pagamentos com Mercado Pago",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "mercado",
+    "pago",
+    "pix",
+    "api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "mercadopago": "^2.0.10"
+  }
+}
