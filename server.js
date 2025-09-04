@@ -1,4 +1,4 @@
-// server.js - VERSÃO COM BANCO DE DADOS E WEBHOOK
+// server.js - VERSÃO COM IDENTIFICADOR POR CELULAR
 import express from 'express';
 import cors from 'cors';
 import { MercadoPagoConfig, Payment } from 'mercadopago';
@@ -11,11 +11,10 @@ import path from 'path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const file = path.join(__dirname, 'db.json');
 const adapter = new JSONFile(file);
-const db = new Low(adapter, { payments: [] }); // Dados padrão: um array vazio de pagamentos
+const db = new Low(adapter, { payments: [] });
 
 const app = express();
-// A porta é fornecida pelo Render, ou 3000 para teste local
-const port = process.env.PORT || 3000; 
+const port = process.env.PORT || 3000;
 
 // Configuração do cliente Mercado Pago
 const client = new MercadoPagoConfig({
@@ -30,33 +29,33 @@ app.use(express.static('public'));
 // ROTA PARA CRIAR O PAGAMENTO
 app.post('/create_payment', async (req, res) => {
     try {
-        await db.read(); // Sempre leia os dados mais recentes do arquivo
+        await db.read();
 
-        const { amount, identifier } = req.body;
+        const { amount, identifier } = req.body; // 'identifier' agora será o número de celular
         const parsedAmount = parseFloat(amount);
 
-        if (!identifier || identifier.trim() === '') {
-            return res.status(400).json({ error: 'A identificação é obrigatória.' });
+        // MUDANÇA: Validação simples para o número de celular
+        if (!identifier || identifier.trim().length < 10) { // Verifica se tem pelo menos 10 dígitos
+            return res.status(400).json({ error: 'O número de celular é obrigatório e deve ser válido.' });
         }
         if (isNaN(parsedAmount) || parsedAmount <= 0) {
             return res.status(400).json({ error: 'Valor inválido.' });
         }
-
+        
+        // MUDANÇA: Descrição do pagamento atualizada
         const payment_data = {
             transaction_amount: parsedAmount,
-            description: `Pagamento para: ${identifier}`,
+            description: `Pagamento referente ao celular: ${identifier}`,
             payment_method_id: 'pix',
             payer: { email: 'pagador@email.com' },
-            // IMPORTANTE: URL do webhook para este serviço no Render
-            notification_url: 'https://gerador-pagamento.onrender.com/webhook'
+            notification_url: 'https://gerador-pagamento.onrender.com/webhook' // Use a sua URL do Render
         };
 
         const result = await payment.create({ body: payment_data });
 
-        // Salva o pagamento no nosso banco de dados
         db.data.payments.push({
             mp_id: result.id,
-            identifier: identifier,
+            identifier: identifier, // Salva o número de celular como identificador
             amount: parsedAmount,
             status: 'pending',
             created_at: new Date().toISOString(),
@@ -76,7 +75,7 @@ app.post('/create_payment', async (req, res) => {
     }
 });
 
-// ROTA DE WEBHOOK (que o Mercado Pago vai chamar)
+// ROTA DE WEBHOOK (sem alterações)
 app.post('/webhook', async (req, res) => {
     const webhookData = req.body;
 
@@ -88,8 +87,8 @@ app.post('/webhook', async (req, res) => {
             await db.read();
             const paymentInDb = db.data.payments.find(p => p.mp_id == paymentId);
 
-            if (paymentInDb && paymentInfo.status === 'approved') {
-                paymentInDb.status = 'approved'; // Atualiza o status
+            if (paymentInDb && paymentInfo.status === 'approved' && paymentInDb.status !== 'approved') {
+                paymentInDb.status = 'approved';
                 paymentInDb.paid_at = new Date().toISOString();
                 await db.write();
             }
@@ -98,14 +97,12 @@ app.post('/webhook', async (req, res) => {
             return res.sendStatus(500);
         }
     }
-    // Responda ao Mercado Pago para confirmar o recebimento
     res.sendStatus(200);
 });
 
-// ROTA PARA BUSCAR A LISTA DE PAGAMENTOS
+// ROTA PARA BUSCAR A LISTA DE PAGAMENTOS (sem alterações)
 app.get('/get_payments', async (req, res) => {
     await db.read();
-    // Retorna a lista ordenada, dos mais recentes para os mais antigos
     const sortedPayments = [...db.data.payments].reverse();
     res.json(sortedPayments);
 });
